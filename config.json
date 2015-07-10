@@ -1,0 +1,15 @@
+{
+  "leases": "/var/db/isc-dhcp/dhcpd.leases",
+  "interval": 10,
+  "json": false,
+  "aliases": {
+    "00:00:00:00:00:01": "My Custom Host"
+  },
+  "ignore": [
+    "00:00:00:00:00:02"
+  ],
+  "pushover": {
+    "user": "_pushover_user_",
+    "token": "_pushover_token_"
+  }
+}

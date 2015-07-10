@@ -1,0 +1,33 @@
+{
+  "name": "dhcpd-notifier",
+  "description": "Alert (notify) when dhcpd gives out new leases over Pushover or stdout",
+  "version": "0.0.0",
+  "author": "Dave Eddy <dave@daveeddy.com> (http://www.daveeddy.com)",
+  "contributors": [],
+  "preferGlobal": true,
+  "repository": {
+    "type": "git",
+    "url": "git://github.com/bahamas10/node-dhcpd-notifier.git"
+  },
+  "bin": {
+    "dhcpd-notifier": "./dhcpd-notifier.js"
+  },
+  "dependencies": {
+    "dhcpd-leases": "^0.0.1",
+    "latest": "^0.2.0",
+    "posix-getopt": "^1.1.0",
+    "pushover-notifications": "^0.2.2"
+  },
+  "devDependencies": {},
+  "optionalDependencies": {},
+  "engines": {
+    "node": "*"
+  },
+  "engine": "node >= 0.8.0",
+  "keywords": [
+    "http",
+    "dhcpd",
+    "isc-dhcpd",
+    "dhcp"
+  ]
+}

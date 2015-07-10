@@ -1,0 +1,24 @@
+<?xml version='1.0'?>
+<!DOCTYPE service_bundle SYSTEM '/usr/share/lib/xml/dtd/service_bundle.dtd.1'>
+<service_bundle type='manifest' name='application-dhcpd-notifier'>
+	<service name='application/dhcpd-notifier' type='service' version='0'>
+		<create_default_instance enabled='true'/>
+		<dependency name='dep0' grouping='require_all' restart_on='error' type='service'>
+			<service_fmri value='svc:/milestone/multi-user:default'/>
+		</dependency>
+		<method_context working_directory='/tmp'>
+			<method_credential user='nobody' group='other'/>
+			<method_environment>
+				<envvar name='PATH' value='/bin:/sbin:/usr/bin:/usr/sbin:/opt/local/bin:/opt/local/sbin'/>
+				<envvar name='DHCPD_NOTIFIER_CONFIG' value='/opt/custom/etc/dhcpd-notifier/config.json'/>
+			</method_environment>
+		</method_context>
+		<exec_method name='start' type='method' exec='dhcpd-notifier &amp;' timeout_seconds='10'/>
+		<exec_method name='stop' type='method' exec=':kill' timeout_seconds='30'/>
+		<template>
+			<common_name>
+				<loctext xml:lang='C'>DHCPD Notifier</loctext>
+			</common_name>
+		</template>
+	</service>
+</service_bundle>
