@@ -66,6 +66,7 @@ config.leases = config.leases || '/var/db/isc-dhcp/dhcpd.leases';
 config.interval = config.interval || 10;
 config.aliases = config.aliases || {};
 config.ignore = config.ignore || [];
+config.expire = config.expire || (60 * 60 * 24);
 
 console.error('watching file %s for changes every %d seconds', config.leases, config.interval);
 
@@ -80,18 +81,37 @@ var oldleases;
 
 function processleases(leases) {
   // find ips in new not in old
+  var now = new Date();
+  var expired = new Date(now - (config.expire * 1000));
+
   Object.keys(leases).forEach(function(ip) {
-    if (oldleases[ip])
-      return;
+    var oldlease = oldleases[ip];
     var lease = leases[ip];
     lease.ip = ip;
 
-    var mac = lease['hardware ethernet'];
-    if (config.aliases[mac])
-      lease.alias = config.aliases[mac];
+    if (oldlease) {
+      // we have seen this host before, check if we should notify for it
 
+      if (lease.start === oldlease.start) {
+        // this is an old lease, ignore it
+        return;
+      }
+
+      if (lease.start > expired) {
+        // the lease has renewed but it hasn't expired yet, so we don't need to
+        // notify
+        return;
+      }
+    }
+
+    // if we are here, the lease is either for a brand new host, or a host
+    // whose previous lease has expired
+    var mac = lease['hardware ethernet'];
     if (config.ignore.indexOf(mac) > -1)
       return;
+
+    if (config.aliases[mac])
+      lease.alias = config.aliases[mac];
 
     // emit line to stdout
     var name = lease.alias || lease['client-hostname'] || '<unknown>';

@@ -2,6 +2,7 @@
   "leases": "/var/db/isc-dhcp/dhcpd.leases",
   "interval": 10,
   "json": false,
+  "expire": 86400,
   "aliases": {
     "00:00:00:00:00:01": "My Custom Host"
   },
