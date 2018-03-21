@@ -13,9 +13,10 @@
     "dhcpd-notifier": "./dhcpd-notifier.js"
   },
   "dependencies": {
-    "dhcpd-leases": "^0.0.1",
+    "assert-plus": "^1.0.0",
+    "dhcpd-leases": "^0.1.1",
     "latest": "^0.2.0",
-    "posix-getopt": "^1.1.0",
+    "posix-getopt": "^1.2.0",
     "pushover-notifications": "^0.2.2"
   },
   "devDependencies": {},

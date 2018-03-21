@@ -20,7 +20,6 @@ Create a configuration JSON file
   "leases": "/var/db/isc-dhcp/dhcpd.leases",
   "interval": 10,
   "json": false,
-  "expire": 86400,
   "aliases": {
     "00:00:00:00:00:01": "My Custom Host"
   },
@@ -50,7 +49,6 @@ Configuration
 - `config.leases` the [dhcpd.leases(5)](http://linux.die.net/man/5/dhcpd.leases) file used by dhcpd
 - `config.interval` number of seconds to reread the leases file
 - `config.json` log in JSON format, defaults to false
-- `config.expire` how old (in seconds) a lease must be before it is considered expired and a notification is generated when it is renewed, defaults to 1 day
 - `config.aliases` a mapping of mac address to custom host name to be used when a new lease is found.  This is useful if a host does not provide an accurate hostname when requesting a lease
 - `config.ignore` an array of mac address to ignore when generating notifications
 - `config.pushover` passed directly to the constructor of [pushovernotifications](https://www.npmjs.com/package/pushover-notifications) - `user` and `token` are all that is needed
