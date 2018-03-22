@@ -109,7 +109,8 @@ function processleases(leases) {
 
         var ip = lease.ip;
         var mac = lease['hardware ethernet'];
-        var name = lease.alias || lease['client-hostname'] || '<unknown>';
+        var name = lease['client-hostname'] || '<unknown>';
+        var alias = lease.alias;
 
         if (oldlease) {
             // we've seen this before and it's not expired
@@ -122,23 +123,25 @@ function processleases(leases) {
             return;
         }
 
-        if (config.aliases[mac]) {
-            lease.alias = config.aliases[mac];
-        }
-
         // emit line to stdout
         if (config.json) {
             console.log(JSON.stringify(lease));
         } else {
-            console.log('[%s] new lease: "%s" %s %s', (new Date().toISOString()), name, ip, mac);
+            console.log('[%s] new lease: "%s" %s %s (%s)',
+                new Date().toISOString(), name, ip, mac, alias);
         }
 
         // pushover if set
         if (po) {
             console.error('sending pushover...');
+            var title = f('dhcp lease for "%s"', name);
+            if (alias) {
+                title += f(' (%s)', alias);
+            }
+            var msg = f('%s -%s', ip, mac);
             po.send({
-                title: f('dhcp lease for "%s"', name),
-                message: f('%s - %s', ip, mac)
+                title: title,
+                message: msg
             }, function(err, res) {
                 if (err) {
                     console.error('failed to pushover: %s', err.message);
@@ -175,6 +178,10 @@ function formatLeases(leases) {
     var ret = {};
 
     leases.forEach(function (lease) {
+        var mac = lease['hardware ethernet'];
+        if (config.aliases.hasOwnProperty(mac)) {
+            lease.alias = config[mac];
+        }
         ret[makeKey(lease)] = lease;
     });
 
