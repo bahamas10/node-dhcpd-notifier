@@ -180,7 +180,7 @@ function formatLeases(leases) {
     leases.forEach(function (lease) {
         var mac = lease['hardware ethernet'];
         if (config.aliases.hasOwnProperty(mac)) {
-            lease.alias = config[mac];
+            lease.alias = config.aliases[mac];
         }
         ret[makeKey(lease)] = lease;
     });
