@@ -1,7 +1,7 @@
 {
   "name": "dhcpd-notifier",
   "description": "Alert (notify) when dhcpd gives out new leases over Pushover or stdout",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "author": "Dave Eddy <dave@daveeddy.com> (http://www.daveeddy.com)",
   "contributors": [],
   "preferGlobal": true,
