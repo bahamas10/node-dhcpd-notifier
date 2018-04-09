@@ -8,18 +8,23 @@
  */
 
 var assert = require('assert-plus');
+var cp = require('child_process');
 var fs = require('fs');
 var f = require('util').format;
 
+var bunyan = require('bunyan');
 var dhcpdleases = require('dhcpd-leases');
 var getopt = require('posix-getopt');
+var vasync = require('vasync');
 
 var package = require('./package.json');
+
+var oldleases;
 
 var usage = [
     'usage: dhcpd-notifier [-huv] <config.json>',
     '',
-    'alert (notify) when dhcpd gives out new leases over Pushover or stdout',
+    'alert (notify) when dhcpd gives out new lease',
     '',
     'options',
     '',
@@ -27,6 +32,11 @@ var usage = [
     '  -u, --updates    check for available updates',
     '  -v, --version    print the version number and exit',
 ].join('\n');
+
+var log = bunyan.createLogger({
+    name: 'dhcpd-notifier',
+    level: 'info'
+});
 
 var options = [
     'h(help)',
@@ -62,6 +72,9 @@ while ((option = parser.getopt())) {
 var args = process.argv.slice(parser.optind());
 var config = args[0] || process.env.DHCPD_NOTIFIER_CONFIG;
 
+log.trace({config: config, args: args}, 'config: "%s"', config);
+
+// Read configuration
 try {
     assert.string(config, 'config must be set as the first argument or env DHCPD_NOTIFIER_CONFIG');
     config = JSON.parse(fs.readFileSync(config, 'utf8'));
@@ -71,23 +84,75 @@ try {
     process.exit(1);
 }
 
-config.leases = config.leases || '/var/db/isc-dhcp/dhcpd.leases';
-config.interval = config.interval || 10;
 config.aliases = config.aliases || {};
 config.ignore = config.ignore || [];
+config.loglevel = config.loglevel || 'info';
 
-console.error('watching file %s for changes every %d seconds',
+assert.string(config.loglevel, 'config.loglevel');
+assert.object(config.exec, 'config.exec');
+assert.string(config.exec.file, 'config.exec.file');
+assert.number(config.exec.timeout, 'config.exec.timeout');
+assert.number(config.exec.timeout, 'config.exec.timeout');
+assert.string(config.leases, 'config.leases');
+assert.number(config.interval, 'config.interval');
+assert(config.interval > 0, 'config.interval > 0');
+assert.object(config.aliases, 'config.aliases');
+assert.arrayOfString(config.ignore, 'config.ignore');
+
+log.level(config.loglevel);
+
+log.debug({config: config}, 'loaded config');
+log.info('watching file %s for changes every %d seconds',
     config.leases, config.interval);
 
-// pushover
-var po;
-if (config.pushover) {
-    console.error('using pushover: %j', config.pushover);
-    po = new (require('pushover-notifications'))(config.pushover);
-}
+/*
+ * A new lease has been seen! this queue will handle executing the child task
+ * with the proper environment serially.
+ */
+var execQueue = vasync.queue(function (lease, cb) {
+    assert.object(lease, 'lease');
+    assert.string(lease.ip, 'lease.ip');
+    assert.optionalString(lease.alias, 'lease.alias');
+    assert.optionalString(lease['hardware ethernet'], 'lease["hardware ethernet"]');
+    assert.optionalString(lease['client-hostname'], 'lease["client-hostname"]');
 
-var oldleases;
+    var env = copyEnv();
 
+    env.DHCPD_NOTIFIER_LEASE = JSON.stringify(lease);
+    env.DHCPD_NOTIFIER_ALIAS = lease.alias || '';
+    env.DHCPD_NOTIFIER_HOSTNAME = lease['client-hostname'] || '';
+    env.DHCPD_NOTIFIER_MAC = lease['hardware ethernet'] || '';
+    env.DHCPD_NOTIFIER_IP = lease.ip;
+
+    var opts = {
+        env: env,
+        timeout: config.exec.timeout * 1000,
+        encoding: 'utf8'
+    };
+
+    log.debug({opts: opts}, 'executing "%s"', config.exec.file);
+    cp.execFile(config.exec.file, [], opts, function (err, stdout, stderr) {
+        var all = {
+            stdout: stdout,
+            stderr: stderr
+        };
+
+        if (err) {
+            all.err = err;
+            log.error(all, 'exeuction failed');
+            cb();
+            return;
+        }
+
+        log.debug(all, 'execution succeeded');
+        cb();
+    });
+}, 1);
+
+/*
+ * Compare old leases to new leases and push an event to the queue if any
+ * notifications should be sent
+ */
 function processleases(leases) {
     assert.object(leases, 'leases');
 
@@ -97,8 +162,12 @@ function processleases(leases) {
             return;
         }
 
-        var name = oldleases[key].alias || oldleases[key]['client-hostname'] || '<unknown>';
-        console.error('removing old lease for %s %s', key, name);
+        var name = oldleases[key]['client-hostname'] || '<unknown>';
+        if (oldleases[key].alias) {
+            name = f('%s (%s)', name, oldleases[key].alias);
+        }
+
+        log.debug('removing old lease for %s: %s', key, name);
         delete oldleases[key];
     });
 
@@ -108,59 +177,47 @@ function processleases(leases) {
         var lease = leases[key];
 
         var ip = lease.ip;
-        var mac = lease['hardware ethernet'];
+        var mac = lease['hardware ethernet'] || 'unknown';
         var name = lease['client-hostname'] || '<unknown>';
-        var alias = lease.alias;
+        var alias = lease.alias || 'n/a';
 
         if (oldlease) {
             // we've seen this before and it's not expired
+            log.trace('seen lease before: "%s" %s %s (%s)',
+                name, ip, mac, alias);
             return;
         }
 
         // if we are here, the lease is either for a brand new host, or a host
         // whose previous lease has expired (effectively brand new)
         if (config.ignore.indexOf(mac) > -1) {
+            log.debug('ignoring lease: "%s" %s %s (%s)',
+                name, ip, mac, alias);
             return;
         }
 
         // emit line to stdout
-        if (config.json) {
-            console.log(JSON.stringify(lease));
-        } else {
-            console.log('[%s] new lease: "%s" %s %s (%s)',
-                new Date().toISOString(), name, ip, mac, alias);
-        }
-
-        // pushover if set
-        if (po) {
-            console.error('sending pushover...');
-            var title = f('dhcp lease for "%s"', name);
-            if (alias) {
-                title += f(' (%s)', alias);
-            }
-            var msg = f('%s -%s', ip, mac);
-            po.send({
-                title: title,
-                message: msg
-            }, function(err, res) {
-                if (err) {
-                    console.error('failed to pushover: %s', err.message);
-                } else {
-                    console.error('sent pushover: %s', res);
-                }
-            });
-        }
+        log.info('new lease: "%s" %s %s (%s)', name, ip, mac, alias);
+        execQueue.push(lease);
     });
 }
 
+/*
+ * Return a key based off the ip and mac of a lease
+ */
 function makeKey(lease) {
     assert.object(lease, 'lease');
     assert.string(lease.ip, 'lease.ip');
     assert.string(lease['hardware ethernet'], 'lease["hardware ethernet"]');
 
-    return f('%s-%s', lease.ip, lease['hardware ethernet']);
+    var mac = lease['hardware ethernet'] || 'unknown';
+
+    return f('%s-%s', lease.ip, mac);
 }
 
+/*
+ * Remove leases that have expired
+ */
 function removeExpiredLeases(leases, t) {
     assert.object(leases, 'leases');
     assert.date(t, 't');
@@ -172,13 +229,17 @@ function removeExpiredLeases(leases, t) {
     });
 }
 
+/*
+ * Given an array of leases (from `dhcpdleases()`), return an object keyed off
+ * of the mac and the IP.
+ */
 function formatLeases(leases) {
     assert.arrayOfObject(leases, 'leases');
 
     var ret = {};
 
     leases.forEach(function (lease) {
-        var mac = lease['hardware ethernet'];
+        var mac = lease['hardware ethernet'] || 'unknown';
         if (config.aliases.hasOwnProperty(mac)) {
             lease.alias = config.aliases[mac];
         }
@@ -188,7 +249,14 @@ function formatLeases(leases) {
     return ret;
 }
 
+/*
+ * 1. read the leases file
+ * 2. format the leases and compare to the last iteration
+ * 3. run "processleases" to process the differences
+ * 4. schedule a later invocation of readleases (loop)
+ */
 function readleases() {
+    log.trace({leases: config.leases}, 'reading leases');
     fs.readFile(config.leases, {encoding: 'utf8'},
         function (err, data) {
 
@@ -205,8 +273,22 @@ function readleases() {
 
         oldleases = leases;
 
+        log.trace('leases read');
         setTimeout(readleases, config.interval * 1000);
     });
 }
 
-readleases();
+// Copy the current env variables to an object
+function copyEnv() {
+    var ret = {};
+    Object.keys(process.env).forEach(function (key) {
+        ret[key] = process.env[key];
+    });
+    return ret;
+}
+
+function main() {
+    readleases();
+}
+
+main();

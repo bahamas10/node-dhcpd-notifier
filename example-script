@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+#
+# This script will be called from dhcpd-notifier whenever a new lease is seen.
+# No arguments are given to this script - data is passed as environmental
+# variables. For Example:
+#
+# DHCPD_NOTIFIER_IP       host IP address
+# DHCPD_NOTIFIER_ALIAS    hostname alias from config if found
+# DHCPD_NOTIFIER_HOSTNAME host hostname
+# DHCPD_NOTIFIER_MAC      host mac address
+# DHCPD_NOTIFIER_LEASE    all lease data JSON encoded
+#
+# Author: Dave Eddy <dave@daveeddy.com>
+# Date: April 09, 2018
+# License: MIT
+
+alias=$DHCPD_NOTIFIER_ALIAS
+ip=$DHCPD_NOTIFIER_IP
+hostname=${DHCPD_NOTIFIER_HOSTNAME:-unknown}
+mac=${DHCPD_NOTIFIER_MAC:-unknown}
+
+title="dhcp lease for \"$hostname\""
+[[ -n $alias ]] && title="$title ($alias)"
+msg="$ip - $mac"
+
+# Send an email, send a pushover - do whatever!
+echo "dhcp lease for '$hostname' ($alias) $ip - $mac"
