@@ -24,4 +24,4 @@ title="dhcp lease for \"$hostname\""
 msg="$ip - $mac"
 
 # Send an email, send a pushover - do whatever!
-echo "dhcp lease for '$hostname' ($alias) $ip - $mac"
+echo "dhcp lease for '$hostname' (alias=$alias) $ip - $mac"
