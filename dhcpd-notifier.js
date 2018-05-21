@@ -208,7 +208,8 @@ function processleases(leases) {
 function makeKey(lease) {
     assert.object(lease, 'lease');
     assert.string(lease.ip, 'lease.ip');
-    assert.string(lease['hardware ethernet'], 'lease["hardware ethernet"]');
+    assert.optionalString(lease['hardware ethernet'],
+        'lease["hardware ethernet"]');
 
     var mac = lease['hardware ethernet'] || 'unknown';
 
